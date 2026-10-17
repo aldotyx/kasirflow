@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth-context';
@@ -248,21 +248,35 @@ export default function POSPage() {
     };
   }, [fetchTableOrders]);
 
+  const processedTableOrderIdsRef = useRef<Set<string>>(new Set());
+
   const importTableOrderToCart = useCallback(
     (order: any) => {
-      const newCartItems = order.items.map((it: any) => {
-        const existingProduct = products.find((p) => p.id === it.productId);
+      if (!order) return;
+      const orderId = order.id || order.orderCode || `order-${Date.now()}`;
+      if (processedTableOrderIdsRef.current.has(orderId)) return;
+      processedTableOrderIdsRef.current.add(orderId);
+
+      const itemsList = Array.isArray(order.items) ? order.items : [];
+      const newCartItems = itemsList.map((it: any, idx: number) => {
+        const prodId = it.productId || it.product_id || it.id || `table-item-${idx}`;
+        const existingProduct = products.find((p) => p.id === prodId);
+        const name = it.productName || it.product_name || it.name || 'Menu Meja';
+        const price = Number(it.unitPrice ?? it.unit_price ?? it.price ?? it.sell_price ?? it.subtotal ?? 0);
+        const qty = Math.max(1, Number(it.quantity ?? it.qty ?? 1));
+        const tableNum = String(order.tableNumber || order.table_number || '00');
+
         const product: Product = existingProduct || {
-          id: it.productId,
+          id: prodId,
           store_id: profile?.store_id || 'demo-store-id',
-          name: it.productName,
-          sell_price: it.unitPrice,
+          name,
+          sell_price: price,
           buy_price: 0,
           stock: 999,
           min_stock: 0,
           category_id: null,
-          sku: `MEJA-${order.tableNumber}`,
-          image_url: it.imageUrl || null,
+          sku: `MEJA-${tableNum}`,
+          image_url: it.imageUrl || it.image_url || null,
           discount_percent: 0,
           is_active: true,
           created_at: new Date().toISOString(),
@@ -271,51 +285,81 @@ export default function POSPage() {
         };
         return {
           product,
-          quantity: it.quantity,
+          quantity: qty,
         };
       });
 
-      cart.setItems(newCartItems);
-      setActiveTableOrderId(order.id);
+      // Update cart using store getState directly to prevent infinite re-render loop
+      useCartStore.getState().setItems(newCartItems);
+      setActiveTableOrderId(order.id || null);
 
-      fetch('/api/table-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, status: 'PREPARING' }),
-      }).catch(() => {});
+      // Clean the URL query param cleanly without page reload
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
 
-      toast.success(`Pesanan Meja ${order.tableNumber} berhasil dimasukkan ke keranjang kasir!`);
+      if (order.id) {
+        fetch('/api/table-orders', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: order.id, status: 'PREPARING' }),
+        }).catch(() => {});
+      }
+
+      const tableLabel = order.tableNumber || order.table_number || '';
+      toast.success(`Pesanan Meja ${tableLabel} berhasil dimasukkan ke keranjang kasir!`);
       setTableOrdersOpen(false);
     },
-    [products, profile?.store_id, cart]
+    [products, profile?.store_id]
   );
 
   // Auto-load order when pulled from /orders (KDS screen)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Check direct localStorage transfer first
+    // 1. Check direct localStorage transfer first
     const directStr = localStorage.getItem('kasirflow_pos_direct_load');
     if (directStr) {
       try {
+        localStorage.removeItem('kasirflow_pos_direct_load');
         const directOrder = JSON.parse(directStr);
-        if (directOrder && Array.isArray(directOrder.items) && directOrder.items.length > 0) {
-          localStorage.removeItem('kasirflow_pos_direct_load');
+        if (directOrder && directOrder.id && !processedTableOrderIdsRef.current.has(directOrder.id)) {
           importTableOrderToCart(directOrder);
           return;
         }
       } catch {}
     }
 
-    // Check URL param loadTableOrder
-    const url = new URL(window.location.href);
-    const paramId = url.searchParams.get('loadTableOrder');
-    if (paramId && tableOrders.length > 0) {
-      const found = tableOrders.find((o) => o.id === paramId || o.orderCode === paramId);
-      if (found) {
-        importTableOrderToCart(found);
+    // 2. Check URL param loadTableOrder
+    try {
+      const url = new URL(window.location.href);
+      const paramId = url.searchParams.get('loadTableOrder');
+      if (paramId && !processedTableOrderIdsRef.current.has(paramId)) {
+        let targetOrder = tableOrders.find((o) => o.id === paramId || o.orderCode === paramId);
+        if (!targetOrder) {
+          const cachedStr = localStorage.getItem('kasirflow_table_orders_cache');
+          if (cachedStr) {
+            const cachedOrders = JSON.parse(cachedStr);
+            if (Array.isArray(cachedOrders)) {
+              targetOrder = cachedOrders.find((o: any) => o.id === paramId || o.orderCode === paramId);
+            }
+          }
+        }
+
+        if (targetOrder) {
+          importTableOrderToCart(targetOrder);
+        } else {
+          fetch(`/api/table-orders?orderId=${encodeURIComponent(paramId)}`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.order && !processedTableOrderIdsRef.current.has(data.order.id)) {
+                importTableOrderToCart(data.order);
+              }
+            })
+            .catch(() => {});
+        }
       }
-    }
+    } catch {}
   }, [tableOrders, importTableOrderToCart]);
 
   // Fetch POS drafts from server & localStorage
