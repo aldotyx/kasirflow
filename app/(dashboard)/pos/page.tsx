@@ -260,14 +260,18 @@ export default function POSPage() {
       const itemsList = Array.isArray(order.items) ? order.items : [];
       const newCartItems = itemsList.map((it: any, idx: number) => {
         const prodId = it.productId || it.product_id || it.id || `table-item-${idx}`;
-        const existingProduct = products.find((p) => p.id === prodId);
         const name = it.productName || it.product_name || it.name || 'Menu Meja';
+        const isUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const existingProduct = products.find(
+          (p) => p.id === prodId || (p.name && name && p.name.trim().toLowerCase() === name.trim().toLowerCase())
+        );
+        const safeId = existingProduct ? existingProduct.id : (isUuidPattern.test(prodId) ? prodId : 'b87e5d23-71ab-4c3e-8e6f-998811223344');
         const price = Number(it.unitPrice ?? it.unit_price ?? it.price ?? it.sell_price ?? it.subtotal ?? 0);
         const qty = Math.max(1, Number(it.quantity ?? it.qty ?? 1));
         const tableNum = String(order.tableNumber || order.table_number || '00');
 
         const product: Product = existingProduct || {
-          id: prodId,
+          id: safeId,
           store_id: profile?.store_id || 'demo-store-id',
           name,
           sell_price: price,
@@ -839,41 +843,50 @@ export default function POSPage() {
         throw new Error('Gagal memproses transaksi: nomor invoice bentrok. Silakan coba lagi.');
       }
 
-      // Create sale items
-      const saleItems = cart.items.map((item) => ({
-        sale_id: sale.id,
-        product_id: item.product.id,
-        product_name: item.product.name,
-        unit_cost: item.product.buy_price,
-        unit_price: Number(item.product.sell_price) * (1 - Number(item.product.discount_percent || 0) / 100),
-        quantity: item.quantity,
-        subtotal: Number(item.product.sell_price) * (1 - Number(item.product.discount_percent || 0) / 100) * item.quantity,
-      }));
+      // Create sale items with UUID safety check (nullable in sale_items)
+      const isUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const saleItems = cart.items.map((item) => {
+        const isProdUuid = isUuidRegex.test(item.product.id);
+        return {
+          sale_id: sale.id,
+          product_id: isProdUuid ? item.product.id : null,
+          product_name: item.product.name,
+          unit_cost: Number(item.product.buy_price || 0),
+          unit_price: Number(item.product.sell_price) * (1 - Number(item.product.discount_percent || 0) / 100),
+          quantity: item.quantity,
+          subtotal: Number(item.product.sell_price) * (1 - Number(item.product.discount_percent || 0) / 100) * item.quantity,
+        };
+      });
 
       const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
       if (itemsError) throw itemsError;
 
-      // Update stock and create inventory logs
+      // Update stock and create inventory logs (only for valid UUID database products)
       for (const item of cart.items) {
+        if (!isUuidRegex.test(item.product.id)) continue;
         const product = products.find((p) => p.id === item.product.id);
         if (!product) continue;
 
-        const newStock = product.stock - item.quantity;
+        const newStock = Math.max(0, product.stock - item.quantity);
         await supabase
           .from('products')
           .update({ stock: newStock })
           .eq('id', item.product.id);
 
-        await supabase.from('inventory_logs').insert({
-          store_id: profile.store_id,
-          product_id: item.product.id,
-          user_id: validUserId,
-          type: 'SALE',
-          quantity_change: -item.quantity,
-          stock_before: product.stock,
-          stock_after: newStock,
-          note: `Penjualan ${finalInvoiceNum}`,
-        });
+        if (validUserId && isUuidRegex.test(validUserId)) {
+          try {
+            await supabase.from('inventory_logs').insert({
+              store_id: profile.store_id,
+              product_id: item.product.id,
+              user_id: validUserId,
+              type: 'SALE',
+              quantity_change: -item.quantity,
+              stock_before: product.stock,
+              stock_after: newStock,
+              note: `Penjualan ${finalInvoiceNum}`,
+            });
+          } catch {}
+        }
       }
 
       const completedReceipt = {
