@@ -495,7 +495,7 @@ export default function ProductsPage() {
   const confirmDelete = async (product: Product) => {
     try {
       await fetch(`/api/products?id=${product.id}`, { method: 'DELETE' });
-      await supabase.from('products').update({ deleted_at: new Date().toISOString() }).eq('id', product.id).catch(() => {});
+      await supabase.from('products').update({ deleted_at: new Date().toISOString() }).eq('id', product.id);
       toast.success(`Produk "${product.name}" berhasil dihapus`);
       loadProducts();
     } catch {
@@ -1150,7 +1150,7 @@ export default function ProductsPage() {
                 Otorisasi Owner
               </span>
               <span className="text-[11px] text-muted-foreground">·</span>
-              <span className="text-[11px] text-muted-foreground font-medium">{actionProduct?.category || 'Katalog Produk'}</span>
+              <span className="text-[11px] text-muted-foreground font-medium">{typeof actionProduct?.category === 'object' ? (actionProduct.category as any)?.name : (actionProduct?.category || 'Katalog Produk')}</span>
             </div>
             <DialogTitle className="text-base font-bold text-foreground">
               Aksi Produk: {actionProduct?.name}

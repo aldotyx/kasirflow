@@ -34,6 +34,7 @@ interface ProductItem {
   description?: string;
   image_url?: string;
   discount_percent?: number;
+  stock?: number;
 }
 
 interface CartItem {

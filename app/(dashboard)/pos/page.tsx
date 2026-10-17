@@ -744,11 +744,11 @@ export default function POSPage() {
       let attempt = 0;
       const maxAttempts = 3;
 
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.id);
+      const validUserId = isUuid ? profile.id : '00000000-0000-4000-8000-000000000001';
+
       while (attempt < maxAttempts) {
         finalInvoiceNum = await generateUniqueInvoiceNumber(profile.store_id, attempt);
-
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profile.id);
-        const validUserId = isUuid ? profile.id : '00000000-0000-4000-8000-000000000001';
 
         const saleData = {
           store_id: profile.store_id,

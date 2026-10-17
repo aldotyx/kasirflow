@@ -185,8 +185,7 @@ export async function POST(request: NextRequest) {
             tax_rate: profileData.tax_rate,
             updated_at: now,
           })
-          .eq('id', targetStoreId)
-          .catch(() => {});
+          .eq('id', targetStoreId);
       }
     } catch {
       // Supabase update error is non-fatal since local profile is saved

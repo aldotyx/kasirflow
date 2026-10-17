@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
-        await supabase.from('profiles').upsert(newProfile).select().maybeSingle().catch(() => {});
+        await supabase.from('profiles').upsert(newProfile).select().maybeSingle();
         setProfile(newProfile);
         setStore(matchedStore);
         return;
@@ -252,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Try updating profile in DB if user is authenticated
     if (user && user.id !== VALID_DEMO_UUID) {
-      await supabase.from('profiles').update({ store_id: storeId }).eq('id', user.id).catch(() => {});
+      await supabase.from('profiles').update({ store_id: storeId }).eq('id', user.id);
     }
   }, [stores, user]);
 

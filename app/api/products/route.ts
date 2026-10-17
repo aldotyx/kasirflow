@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
             stock_before: 0,
             stock_after: parsedStock,
             note: 'Stok awal produk baru',
-          }).catch(() => {});
+          });
         }
       }
     } catch {
@@ -422,7 +422,7 @@ export async function PUT(request: NextRequest) {
           stock_before: currentStock,
           stock_after: finalStock,
           note: note || (logType === 'RESTOCK' ? `Restock +${qtyChange} unit` : `Penyesuaian stok ke ${finalStock}`),
-        }).catch(() => {});
+        });
       }
     } catch {
       // Supabase error non-fatal, fallback handles it
