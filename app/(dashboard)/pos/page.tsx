@@ -270,20 +270,20 @@ export default function POSPage() {
         const qty = Math.max(1, Number(it.quantity ?? it.qty ?? 1));
         const tableNum = String(order.tableNumber || order.table_number || '00');
 
-        const product: Product = existingProduct || {
-          id: safeId,
-          store_id: profile?.store_id || 'demo-store-id',
-          name,
-          sell_price: price,
-          buy_price: 0,
-          stock: 999,
-          min_stock: 0,
-          category_id: null,
-          sku: `MEJA-${tableNum}`,
-          image_url: it.imageUrl || it.image_url || null,
-          discount_percent: 0,
+        const product: Product = {
+          id: existingProduct?.id || safeId,
+          store_id: profile?.store_id || '2f2af344-ed08-43d2-8bdf-0f9aa412f57c',
+          name: existingProduct?.name || name,
+          sell_price: price > 0 ? price : (Number(existingProduct?.sell_price) || 0),
+          buy_price: Number(existingProduct?.buy_price) || 0,
+          stock: existingProduct?.stock !== undefined ? existingProduct.stock : 999,
+          min_stock: existingProduct?.min_stock || 0,
+          category_id: existingProduct?.category_id || null,
+          sku: existingProduct?.sku || `MEJA-${tableNum}`,
+          image_url: it.imageUrl || it.image_url || existingProduct?.image_url || null,
+          discount_percent: existingProduct?.discount_percent || 0,
           is_active: true,
-          created_at: new Date().toISOString(),
+          created_at: existingProduct?.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString(),
           deleted_at: null,
         };
@@ -843,13 +843,16 @@ export default function POSPage() {
         throw new Error('Gagal memproses transaksi: nomor invoice bentrok. Silakan coba lagi.');
       }
 
-      // Create sale items with UUID safety check (nullable in sale_items)
+      // Create sale items with foreign key constraint safety (product_id REFERENCES products(id))
       const isUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const saleItems = cart.items.map((item) => {
-        const isProdUuid = isUuidRegex.test(item.product.id);
+        // Check if this product actually exists in the database products list
+        const matchingDbProduct = products.find((p) => p.id === item.product.id);
+        const validFkId = matchingDbProduct && isUuidRegex.test(matchingDbProduct.id) ? matchingDbProduct.id : null;
+
         return {
           sale_id: sale.id,
-          product_id: isProdUuid ? item.product.id : null,
+          product_id: validFkId,
           product_name: item.product.name,
           unit_cost: Number(item.product.buy_price || 0),
           unit_price: Number(item.product.sell_price) * (1 - Number(item.product.discount_percent || 0) / 100),
