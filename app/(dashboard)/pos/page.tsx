@@ -249,6 +249,7 @@ export default function POSPage() {
   }, [fetchTableOrders]);
 
   const processedTableOrderIdsRef = useRef<Set<string>>(new Set());
+  const realDbProductIdsRef = useRef<Set<string>>(new Set());
 
   const importTableOrderToCart = useCallback(
     (order: any) => {
@@ -651,6 +652,7 @@ export default function POSPage() {
     ]);
 
     if (productsRes.data && productsRes.data.length > 0) {
+      realDbProductIdsRef.current = new Set(productsRes.data.map((p: any) => p.id));
       setProducts(productsRes.data as Product[]);
       const slug = store?.slug || 'aldocoffestreet';
       fetch('/api/menu', {
@@ -846,9 +848,8 @@ export default function POSPage() {
       // Create sale items with foreign key constraint safety (product_id REFERENCES products(id))
       const isUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const saleItems = cart.items.map((item) => {
-        // Check if this product actually exists in the database products list
-        const matchingDbProduct = products.find((p) => p.id === item.product.id);
-        const validFkId = matchingDbProduct && isUuidRegex.test(matchingDbProduct.id) ? matchingDbProduct.id : null;
+        const isDbProduct = realDbProductIdsRef.current.has(item.product.id);
+        const validFkId = isDbProduct && isUuidRegex.test(item.product.id) ? item.product.id : null;
 
         return {
           sale_id: sale.id,
@@ -861,8 +862,22 @@ export default function POSPage() {
         };
       });
 
-      const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
-      if (itemsError) throw itemsError;
+      let { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
+      if (itemsError) {
+        console.warn('sale_items insert error, trying fallback:', itemsError.message);
+        if (
+          itemsError.code === '23503' ||
+          itemsError.message?.toLowerCase().includes('foreign key') ||
+          itemsError.message?.toLowerCase().includes('sale_items_product_id_fkey')
+        ) {
+          // Automatic safe retry: set product_id to null (fully supported by PostgreSQL schema)
+          const fallbackItems = saleItems.map((si) => ({ ...si, product_id: null }));
+          const { error: retryError } = await supabase.from('sale_items').insert(fallbackItems);
+          if (retryError) throw retryError;
+        } else {
+          throw itemsError;
+        }
+      }
 
       // Update stock and create inventory logs (only for valid UUID database products)
       for (const item of cart.items) {
