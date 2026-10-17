@@ -1,0 +1,6 @@
+{
+  "name": "KasirFlow",
+  "description": "Sistem POS modern dengan Business Intelligence engine untuk UMKM Indonesia",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

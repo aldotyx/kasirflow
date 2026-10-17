@@ -1,0 +1,21 @@
+[
+  {
+    "id": "prod-mendoan-001",
+    "store_id": "2f2af344-ed08-43d2-8bdf-0f9aa412f57c",
+    "name": "Tempe Mendoan",
+    "sku": "MDN-01",
+    "category": "Makanan & Camilan",
+    "category_id": null,
+    "buy_price": 6500,
+    "sell_price": 12000,
+    "discount_percent": 0,
+    "stock": 50,
+    "min_stock": 5,
+    "description": "Tempe mendoan hangat khas bumbu rempah gurih, disajikan dengan kecap pedas cabai rawit.",
+    "image_url": "https://rgtltgnfgjbntrgeavrx.supabase.co/storage/v1/object/public/product-images/2f2af344-ed08-43d2-8bdf-0f9aa412f57c/1791996003100-s96zxr.jpg",
+    "is_active": true,
+    "created_at": "2026-10-14T10:00:00.000Z",
+    "updated_at": "2026-10-14T16:46:27.688Z",
+    "deleted_at": null
+  }
+]

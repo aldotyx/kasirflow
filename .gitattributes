@@ -1,0 +1,11 @@
+# GitHub Linguist Overrides
+# Ignore SQL files and Supabase migrations so the repo language is TypeScript/React, not PLpgSQL
+supabase/** linguist-vendored=true
+supabase/** linguist-documentation=true
+*.sql linguist-detectable=false
+*.sql linguist-vendored=true
+
+# Ensure TypeScript and Next.js are detected as the primary language
+*.ts linguist-detectable=true
+*.tsx linguist-detectable=true
+*.css linguist-detectable=true
